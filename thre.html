@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>자세 분석 결과</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    @font-face {
+      font-family: 'KakaoSmallSans-Bold';
+      src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/2503@1.0/KakaoSmallSans-Bold.woff2') format('woff2');
+      font-weight: 700;
+      font-style: normal;
+    }
+
+    body {
+      background-color: #FFFDEC;
+      font-family: 'KakaoSmallSans-Bold', sans-serif;
+      line-height: 1.8;
+      padding: 50px;
+      color: #4C3A51;
+    }
+
+
+    h2 {
+      font-size: 32px;
+      margin-bottom: 30px;
+      /* h2를 가운데 정렬하고 싶다면 아래 속성 추가 */
+      /* text-align: center; */
+    }
+
+    .date-select {
+      margin-bottom: 20px;
+      padding: 8px 14px;
+      font-size: 16px;
+      border-radius: 8px;
+      border: 2px solid #f3c5cd;
+      background-color: #fcdfe8;
+      /* 가운데 정렬을 위해 display: block; + margin: 0 auto; 를 적용할 수도 있음 */
+      /* display: block;
+         margin: 0 auto; */
+    }
+
+    .box {
+      width: 90%;
+      max-width: 800px;
+      margin: 25px auto;
+      /* box 내부 모든 텍스트를 가운데 정렬하고 싶다면 추가 */
+      /* text-align: center; */
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0 auto; /* 테이블 자체를 페이지 중앙에 배치 */
+    }
+
+    th, td {
+      border: 1px solid #f4aabb;
+      padding: 12px;
+      text-align: center; /* 셀 내부 텍스트 중앙 정렬 */
+      font-size: 16px;
+    }
+
+    th {
+      background-color: #f89fb4;
+      color: white;
+    }
+
+    td {
+      background-color: white;
+    }
+
+    #timeSpentText {
+      margin-top: 20px;
+      font-size: 18px;
+      color: #D65D7A;
+      font-weight: bold;
+      /* 중앙 정렬 추가 */
+      text-align: center;
+    }
+
+    canvas {
+      width: 100% !important;
+      height: 350px !important;
+      background-color: transparent;
+      display: block;
+      margin: 0 auto;
+    }
+  </style>
+</head>
+<body>
+  <h2>📊 자세 분석 결과</h2>
+  <label for="datePicker">📅 날짜 선택:</label>
+  <input type="date" id="datePicker" class="date-select">
+
+  <!-- 표 -->
+  <div class="box">
+    <table>
+      <tr>
+        <th>🚨 잘못된 자세</th>
+        <th>📈 발생 횟수</th>
+      </tr>
+      <tr><td>얼굴이 오른쪽으로 기우는 자세</td><td id="right_tilt">0</td></tr>
+      <tr><td>얼굴이 왼쪽으로 기우는 자세</td><td id="left_tilt">0</td></tr>
+      <tr><td>거북목 자세</td><td id="forward_head">0</td></tr>
+      <tr><td>오른쪽 어깨가 올라감</td><td id="right_shoulder_up">0</td></tr>
+      <tr><td>왼쪽 어깨가 올라감</td><td id="left_shoulder_up">0</td></tr>
+    </table>
+  </div>
+
+  <!-- 시간 표시 -->
+  <p id="timeSpentText">🔥 총 사용 시간: 0초</p>
+
+  <!-- 차트 -->
+  <div class="box">
+    <canvas id="postureChart"></canvas>
+  </div>
+
+  <script>
+    window.onload = function () {
+      const allPostureData = JSON.parse(localStorage.getItem("postureData")) || {};
+      const datePicker = document.getElementById("datePicker");
+      const ctx = document.getElementById('postureChart').getContext('2d');
+      let postureChart;
+
+      const today = new Date();
+      today.setHours(today.getHours() + 9);
+      const todayString = today.toISOString().split('T')[0];
+
+      const dates = Object.keys(allPostureData).sort();
+
+      if (dates.length > 0) {
+        datePicker.min = dates[0];
+        datePicker.max = dates[dates.length - 1];
+      } else {
+        datePicker.disabled = true;
+      }
+
+      datePicker.value = dates.includes(todayString) ? todayString : (dates.length > 0 ? dates[dates.length - 1] : "");
+
+      function loadPostureData(date) {
+        const data = allPostureData[date] || {
+          "right_tilt": 0,
+          "left_tilt": 0,
+          "forward_head": 0,
+          "right_shoulder_up": 0,
+          "left_shoulder_up": 0,
+          "time_spent": 0
+        };
+
+        document.getElementById("right_tilt").textContent = data.right_tilt;
+        document.getElementById("left_tilt").textContent = data.left_tilt;
+        document.getElementById("forward_head").textContent = data.forward_head;
+        document.getElementById("right_shoulder_up").textContent = data.right_shoulder_up;
+        document.getElementById("left_shoulder_up").textContent = data.left_shoulder_up;
+
+        const minutes = Math.floor(data.time_spent / 60);
+        const seconds = data.time_spent % 60;
+        document.getElementById("timeSpentText").innerHTML = `🔥 총 사용 시간: ${minutes}분 ${seconds}초`;
+
+        const chartData = [
+          data.right_tilt,
+          data.left_tilt,
+          data.forward_head,
+          data.right_shoulder_up,
+          data.left_shoulder_up
+        ];
+
+        if (postureChart) postureChart.destroy();
+        postureChart = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: ["오른쪽 기울임", "왼쪽 기울임", "거북목", "오른쪽 어깨 상승", "왼쪽 어깨 상승"],
+            datasets: [{
+              label: "발생 횟수",
+              data: chartData,
+              backgroundColor: ["#E6B2BA", "#FAD0C4", "#FFF7F3", "#7be98b", "#d5b4ee"]
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { display: false }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: { font: { size: 14 } }
+              },
+              x: {
+                ticks: { font: { size: 14 } }
+              }
+            }
+          }
+        });
+      }
+
+      loadPostureData(datePicker.value);
+      datePicker.addEventListener("change", () => {
+        if (!dates.includes(datePicker.value)) {
+          alert("선택하신 날짜에는 데이터가 없습니다.");
+          datePicker.value = dates.length > 0 ? dates[dates.length - 1] : "";
+        }
+        loadPostureData(datePicker.value);
+      });
+    };
+  </script>
+</body>
+</html>

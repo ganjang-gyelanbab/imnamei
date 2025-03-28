@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>바른자세 알리미 크로우체크</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    @font-face {
+      font-family: 'KakaoBigSans-ExtraBold';
+      src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/2503@1.0/KakaoBigSans-ExtraBold.woff2') format('woff2');
+      font-weight: 800;
+      font-style: normal;
+    }
+
+    /* 전체 기본 폰트 및 두께 */
+    body {
+      font-family: 'KakaoBigSans-ExtraBold', sans-serif;
+      background-color: #FFFDEC;
+      color: #3B3B3B;
+      font-weight: 400 !important; /* 기본 두께 400 */
+    }
+
+    /* 제목은 굵게! */
+    h1 {
+      font-weight: 800 !important;
+    }
+
+    h2,
+    p,
+    .start-btn,
+    .highlight {
+      font-weight: 400 !important;
+    }
+
+    .highlight {
+      background-color: #FFE8E6;
+      padding: 2px 8px;
+      border-radius: 8px;
+      color: #D65D7A;
+    }
+
+    .start-btn {
+      background-color: #F4CFC3;
+      color: #3B3B3B;
+      padding: 14px 28px;
+      font-size: 18px;
+      border-radius: 12px;
+      transition: all 0.3s ease;
+      box-shadow: 2px 2px 10px rgba(0,0,0,0.05);
+    }
+
+    .start-btn:hover {
+      background-color: #eec2b4;
+    }
+  </style>
+</head>
+<body class="flex items-center justify-center min-h-screen px-6">
+  <div class="max-w-2xl w-full bg-white p-10 rounded-3xl shadow-md border border-[#f0f0f0]">
+    <h2 class="text-[#D65D7A] mb-2">바른자세 알리미 크로우체크</h2>
+    
+    <h1 class="text-4xl leading-snug mb-6">
+      나쁜 자세가 감지되면<br>알려드려요 🙂
+    </h1>
+
+    <p class="text-lg leading-relaxed mb-6">
+      <span class="highlight">하루종일 노트북 앞에 앉아 있나요?</span><br/>
+      무의식 중에 흐트러지는 자세, 이제 걱정 마세요.<br/>
+      실시간으로 자세를 확인하고<br/>
+      <span class="highlight">나쁜 자세가 감지되면 바로 알림!</span>
+    </p>
+
+    <div class="mt-4">
+      <button onclick="location.href='two two.html'" class="start-btn">
+        바른 자세 시작하기
+      </button>
+    </div>
+
+    <p class="text-sm text-gray-500 mt-6 text-center">
+      기능을 사용하려면<br>
+      <span class="font-semibold text-[#D65D7A]">카메라 권한</span>과 
+      <span class="font-semibold text-[#D65D7A]">알림 권한</span>을 허용해주세요 🙏
+    </p>
+  </div>
+</body>
+</html>

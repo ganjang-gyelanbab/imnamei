@@ -1,0 +1,430 @@
+<!DOCTYPE html> 
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>PC 사용자를 위한 자세교정</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.6.0.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose"></script>
+    <style>
+         @font-face {
+            font-family: 'KakaoSmallSans-Bold';
+            src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/2503@1.0/KakaoSmallSans-Bold.woff2') format('woff2');
+            font-weight: 700;
+            font-style: normal;
+         }
+        body {
+            background-color: #FFFDEC;
+            color: #4C585B;
+            font-family: 'KakaoSmallSans-Bold', sans-serif;
+            line-height: 1.8;
+            text-align: center;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            max-width: 800px;
+            margin: 50px auto;
+        }
+
+        h2 {
+            font-size: 30px;
+            font-weight:bold;
+            color: #D65D7A;
+            margin-bottom: 20px;
+        }
+
+        h4 {
+            font-size: 18px;
+            font-weight: 500;
+            color: #4C5858;
+            margin-bottom: 12px;
+        }
+
+        .small-text {
+            font-size: 14px;
+            font-weight: 300;
+            white-space: nowrap;
+            line-height: 1.6;
+        }
+
+        .button-group {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px;
+            margin-bottom: 25px;
+        }
+
+        .btn-primary{
+            background-color: #FFB6C1;
+            border: none;
+            color: white;
+        }
+        .btn-success {
+            font-size: 16px;
+            padding: 8px 16px;
+            font-weight: 500;
+            border-radius: 8px;
+        }
+
+        .btn-primary {
+            background-color: #FFB6C1;;
+            border-color: #ffffff;
+        }
+
+        .btn-success {
+            background-color: #A5BFCC;
+            border-color: #7E99A3;
+        }
+
+        .canvas-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 5px;
+        }
+
+        canvas {
+            border: 3px solid #7E99A3;
+            background-color: white;
+            width: 480px;
+            height: 360px;
+        }
+
+        #label-container {
+            margin-top: 10px;
+            font-size: 18px;
+            text-align: center;
+            color: #D65D7A;
+            font-weight: 500;
+            padding: 10px 15px;
+            background-color:  #FFE4E1;
+            border-radius: 10px;
+            display: inline-block;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h2>PC 사용자를 위한 자세교정 웹페이지</h2>
+        <p class="lead small-text">
+            ✔ 웹캠을 준비한 후 "자세교정 시작" 버튼을 누르세요.<br>
+            ✔ 바른 자세가 아닐 경우 경고음이 재생됩니다.<br>
+            ✔ 자세가 크게 벗어날 때만 작동하여 업무 집중도를 방해하지 않습니다.<br>
+            ✔ 조용한 공간이라면 알림 버튼을 눌러 경고음 대신 경고 알림을 받을 수 있습니다<br>
+        </p>
+
+        <div class="canvas-section">
+            <canvas id="canvas"></canvas>
+            <div id="label-container"></div>
+        </div>
+
+        <div class="button-group">
+            <button type="button" class="btn btn-primary" onclick="toggleMode()">알림 모드: <span
+                    id="modeText">ON</span></button>
+            <button type="button" class="btn btn-success" onclick="init()">시작</button>
+            <button type="button" class="btn btn-danger" onclick="exitProgram()" id="exitButton"
+                style="display: none;">종료</button>
+        </div>
+    </div>
+    <audio id="alertSound">
+        <source src="wakeupalarm.mp3" type="audio/mpeg">
+    </audio>
+    <script>
+        const URL = "https://teachablemachine.withgoogle.com/models/K_njbSr-S/";
+        let model, webcam, ctx, labelContainer, maxPredictions;
+        let alertSound = document.getElementById("alertSound");
+        let mode = "notification";
+        let badPostureStartTime = null;
+        let alertCooldown = false;
+        let postureCounts = {
+            right_tilt: 0,
+            left_tilt: 0,
+            forward_head: 0,
+            right_shoulder_up: 0,
+            left_shoulder_up: 0
+        };
+
+        let mediapipePose;
+        let teachableMachinePose;
+        const poseOptions = {
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+        };
+        const poseModel = new Pose(poseOptions);
+        const videoElement = document.createElement('video');
+
+        poseModel.setOptions({
+            modelComplexity: 2,
+            smoothLandmarks: true,
+            enableSegmentation: false,
+            smoothSegmentation: false,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5,
+        });
+
+        poseModel.onResults(onResults);
+
+        function toggleMode() {
+            mode = (mode === "notification") ? "sound" : "notification";
+            document.getElementById("modeText").innerText = (mode === "notification") ? "ON" : "OFF";
+        }
+
+        async function init() {
+            startButton = document.querySelector('.btn-success');
+            exitButton = document.querySelector('.btn-danger');
+
+            startButton.style.display = "none";
+            exitButton.style.display = "inline-block";
+
+            await Notification.requestPermission();
+
+            const modelURL = URL + "model.json";
+            const metadataURL = URL + "metadata.json";
+
+            model = await tmPose.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
+
+            const size = 480;
+            webcam = new tmPose.Webcam(size, size, true);
+            try {
+                await webcam.setup();
+                await webcam.play();
+                console.log("웹캠이 시작되었습니다.");
+            } catch (error) {
+                console.error("웹캠 설정 중 오류 발생:", error);
+            }
+
+            videoElement.srcObject = webcam.webcam.stream;
+            videoElement.play();
+
+            window.requestAnimationFrame(loop);
+
+            const canvas = document.getElementById("canvas");
+            canvas.width = size;
+            canvas.height = size;
+            ctx = canvas.getContext("2d");
+
+            labelContainer = document.getElementById("label-container");
+            labelContainer.innerHTML = "";
+            for (let i = 0; i < maxPredictions; i++) {
+                labelContainer.appendChild(document.createElement("div"));
+            }
+        }
+
+        async function loop() {
+            webcam.update();
+            await predict();
+            await poseModel.send({ image: webcam.canvas });
+            window.requestAnimationFrame(loop);
+        }
+
+        function isBadPosture(tmPose, mpPose) {
+            const threshold = 0.5;
+
+            return tmPose.some((keypoint, index) => {
+                const mpLandmark = mpPose[index];
+                return keypoint.score < threshold && mpLandmark.visibility < threshold;
+            });
+        }
+
+        async function predict() {
+            if (!webcam.canvas) return;
+
+            const { pose, posenetOutput } = await model.estimatePose(webcam.canvas);
+            const prediction = await model.predict(posenetOutput);
+
+            teachableMachinePose = pose;
+
+            let message = "바른 자세입니다. 지금 자세를 유지하세요";
+            let playAlert = false;
+
+            let currentPostureState = "";
+
+            if (prediction[1].probability.toFixed(2) == 1.00) {
+                currentPostureState = "right_tilt";
+            } else if (prediction[2].probability.toFixed(2) == 1.00) {
+                currentPostureState = "left_tilt";
+            } else if (prediction[3].probability.toFixed(2) == 1.00) {
+                currentPostureState = "forward_head";
+            } else if (prediction[4].probability.toFixed(2) >= 0.98) {
+                currentPostureState = "right_shoulder_up";
+            } else if (prediction[5].probability.toFixed(2) == 1.00) {
+                currentPostureState = "left_shoulder_up";
+            }
+
+            if (mediapipePose && isBadPosture(teachableMachinePose.keypoints, mediapipePose)) {
+                switch (currentPostureState) {
+                    case "right_tilt":
+                        message = "얼굴이 오른쪽으로 기울었습니다. 바른 자세를 유지하세요";
+                        playAlert = true;
+                        break;
+                    case "left_tilt":
+                        message = "얼굴이 왼쪽으로 기울었습니다. 바른 자세를 유지하세요";
+                        playAlert = true;
+                        break;
+                    case "forward_head":
+                        message = "거북목 자세입니다. 바른 자세를 유지하세요";
+                        playAlert = true;
+                        break;
+                    case "right_shoulder_up":
+                        message = "오른쪽 어깨가 올라갔습니다. 바른 자세를 유지하세요.";
+                        playAlert = true;
+                        break;
+                    case "left_shoulder_up":
+                        message = "왼쪽 어깨가 올라갔습니다. 바른 자세를 유지하세요.";
+                        playAlert = true;
+                        break;
+                    default:
+                        message = "바른 자세입니다. 지금 자세를 유지하세요";
+                        playAlert = false;
+                }
+            }
+
+            if (playAlert) {
+                if (badPostureStartTime === null) {
+                    badPostureStartTime = new Date().getTime();
+                } else {
+                    let elapsedTime = (new Date().getTime() - badPostureStartTime) / 1000;
+                    if (elapsedTime > 2 && !alertCooldown) {
+                        labelContainer.innerText = message;
+                        document.body.style.backgroundColor = "#f1a1a1";
+
+                        if (currentPostureState) {
+                            postureCounts[currentPostureState]++;
+                        }
+
+                        if (mode === "notification") {
+                            new Notification("자세 교정 알림", {
+                                body: message,
+                                icon: "image.png"
+                            });
+                        } else {
+                            alertSound.play();
+                        }
+
+                        alertCooldown = true;
+                        setTimeout(() => { alertCooldown = false; }, 10000);
+                    }
+                }
+            } else {
+                badPostureStartTime = null;
+                document.body.style.backgroundColor = "#F4EDD3";
+                labelContainer.innerText = "바른 자세입니다. 지금 자세를 유지하세요";
+            }
+
+            drawPose();
+        }
+
+        function onResults(results) {
+            mediapipePose = results.poseLandmarks;
+            drawPose();
+        }
+
+        function drawLandmarks(context, landmarks, options) {
+            const defaultOptions = {
+                color: 'red',
+                lineWidth: 2,
+            };
+            const opts = Object.assign({}, defaultOptions, options);
+
+            context.fillStyle = opts.color;
+            context.strokeStyle = opts.color;
+            context.lineWidth = opts.lineWidth;
+
+            for (const landmark of landmarks) {
+                context.beginPath();
+                context.arc(landmark.x * context.canvas.width, landmark.y * context.canvas.height, 5, 0, 2 * Math.PI);
+                context.fill();
+            }
+        }
+
+        function drawKeypoints(context, keypoints, options) {
+            const defaultOptions = {
+                color: 'blue',
+                size: 5,
+            };
+            const opts = Object.assign({}, defaultOptions, options);
+
+            context.fillStyle = opts.color;
+            context.strokeStyle = opts.color;
+
+            keypoints.forEach(keypoint => {
+                if (keypoint.score > 0.5) {
+                    context.beginPath();
+                    context.rect(keypoint.position.x * context.canvas.width - opts.size / 2, keypoint.position.y * context.canvas.height - opts.size / 2, opts.size, opts.size);
+                    context.fill();
+                }
+            });
+        }
+
+        function drawPose() {
+            if (webcam.canvas) {
+                ctx.drawImage(webcam.canvas, 0, 0);
+                if (teachableMachinePose) {
+                    const minPartConfidence = 0.5;
+                    drawKeypoints(ctx, teachableMachinePose.keypoints, { color: 'blue', size: 5 });
+                    tmPose.drawSkeleton(teachableMachinePose.keypoints, minPartConfidence, ctx, { color: 'blue' });
+                }
+
+                if (mediapipePose) {
+                    drawLandmarks(ctx, mediapipePose, { color: 'red', lineWidth: 2 });
+                }
+            }
+        }
+
+        let startTime = new Date();
+
+        function exitProgram() {
+            let endTime = new Date();
+            let timeSpent = Math.floor((endTime - startTime) / 1000);
+
+            let today = new Date();
+            today.setHours(today.getHours() + 9);
+            let todayString = today.toISOString().split("T")[0];
+
+            let allPostureData = JSON.parse(localStorage.getItem("postureData")) || {};
+
+            if (!allPostureData[todayString]) {
+                allPostureData[todayString] = {
+                    "right_tilt": 0,
+                    "left_tilt": 0,
+                    "forward_head": 0,
+                    "right_shoulder_up": 0,
+                    "left_shoulder_up": 0,
+                    "time_spent": 0
+                };
+            }
+
+            // 자세 카운트 값을 localStorage에 업데이트
+            allPostureData[todayString].right_tilt += postureCounts.right_tilt;
+            allPostureData[todayString].left_tilt += postureCounts.left_tilt;
+            allPostureData[todayString].forward_head += postureCounts.forward_head;
+            allPostureData[todayString].right_shoulder_up += postureCounts.right_shoulder_up;
+            allPostureData[todayString].left_shoulder_up += postureCounts.left_shoulder_up;
+            allPostureData[todayString].time_spent += timeSpent;
+
+            postureCounts = {
+                right_tilt: 0,
+                left_tilt: 0,
+                forward_head: 0,
+                right_shoulder_up: 0,
+                left_shoulder_up: 0
+            };
+
+            localStorage.setItem("postureData", JSON.stringify(allPostureData));
+
+            window.location.href = "thre.html";
+        }
+        
+    </script>
+</body>
+
+</html>
+
